@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a1630" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="description" content="Wrap a gift and send it as a link." />
+    <title>giftwrap</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='12' width='24' height='17' rx='2' fill='%23c8102e'/%3E%3Crect x='3' y='8' width='26' height='6' rx='1.5' fill='%23e3313f'/%3E%3Crect x='14' y='8' width='4' height='21' fill='%23f2c14e'/%3E%3Cpath d='M16 8c-2-5-8-5-7-2s5 2 7 2zM16 8c2-5 8-5 7-2s-5 2-7 2z' fill='%23f2c14e'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <div class="wrap-layout">
+      <div class="preview">
+        <canvas id="scene" class="scene" tabindex="0" aria-label="Preview of the wrapped gift"></canvas>
+        <div id="tag" class="tag" hidden></div>
+      </div>
+
+      <form class="panel" id="form" novalidate autocomplete="off">
+        <div class="brand">
+          <h1><span id="logo"></span>giftwrap</h1>
+          <button class="icon-btn" id="shuffle" type="button" aria-label="Shuffle paper and ribbon" title="Shuffle"></button>
+        </div>
+
+        <div class="fields">
+          <div class="field">
+            <label for="from">From</label>
+            <input id="from" name="from" maxlength="40" />
+          </div>
+          <div class="field">
+            <label for="to">To</label>
+            <input id="to" name="to" maxlength="40" />
+          </div>
+          <div class="field wide">
+            <label for="title">Gift</label>
+            <input id="title" name="title" maxlength="80" />
+          </div>
+          <div class="field wide">
+            <label for="code">Code</label>
+            <input id="code" name="code" maxlength="80" spellcheck="false" autocapitalize="characters" />
+          </div>
+          <div class="field wide" id="image-field">
+            <label for="image">Image URL</label>
+            <div class="image-row">
+              <input id="image" name="image" type="url" inputmode="url" maxlength="1024" placeholder="https://" spellcheck="false" />
+              <img id="thumb" class="thumb" alt="" hidden referrerpolicy="no-referrer" />
+            </div>
+            <div class="field-note" id="image-note" hidden></div>
+          </div>
+        </div>
+
+        <fieldset class="group">
+          <legend class="visually-hidden">Paper</legend>
+          <span class="group-label" aria-hidden="true">Paper</span>
+          <div class="swatches" id="patterns" role="group" aria-label="Pattern"></div>
+          <div class="row">
+            <input class="color" type="color" id="paper-base" aria-label="Paper colour" title="Paper" />
+            <input class="color" type="color" id="paper-accent" aria-label="Pattern colour" title="Pattern" />
+            <span class="sep" aria-hidden="true"></span>
+            <div class="row" id="paper-finish" role="group" aria-label="Paper finish"></div>
+          </div>
+          <div class="row">
+            <input type="range" id="paper-scale" min="0" max="3" step="1" aria-label="Pattern size" title="Pattern size" />
+          </div>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend class="visually-hidden">Ribbon</legend>
+          <span class="group-label" aria-hidden="true">Ribbon</span>
+          <div class="row">
+            <div class="row" id="bows" role="group" aria-label="Bow"></div>
+            <span class="sep" aria-hidden="true"></span>
+            <input class="color" type="color" id="ribbon-color" aria-label="Ribbon colour" title="Ribbon" />
+            <div class="row" id="ribbon-finish" role="group" aria-label="Ribbon finish"></div>
+          </div>
+          <div class="row">
+            <input type="range" id="ribbon-width" min="0" max="2" step="1" aria-label="Ribbon width" title="Ribbon width" />
+          </div>
+        </fieldset>
+
+        <button class="create" id="create" type="submit"><span id="create-icon"></span>Create</button>
+        <div class="form-error" id="form-error" role="alert" hidden></div>
+        <div class="result" id="result" hidden>
+          <input id="link" readonly aria-label="Gift link" />
+          <button class="icon-btn" id="copy-link" type="button" aria-label="Copy link" title="Copy"></button>
+          <button class="icon-btn" id="share-link" type="button" aria-label="Share link" title="Share" hidden></button>
+          <a class="icon-btn" id="open-link" target="_blank" rel="noopener noreferrer" aria-label="Open gift" title="Open"></a>
+        </div>
+      </form>
+    </div>
+    <script type="module" src="/src/wrap/main.ts"></script>
+  </body>
+</html>
