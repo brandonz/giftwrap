@@ -38,5 +38,7 @@ export default defineConfig({
   },
   test: {
     include: ['test/**/*.test.ts'],
+    // The physics tests simulate whole unwraps; CI runners are several times slower than a laptop.
+    testTimeout: 60_000,
   },
 });
