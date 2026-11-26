@@ -476,6 +476,13 @@ body.open {
   border-color: var(--bad);
 }
 
+.field-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  opacity: 0.85;
+}
+
 .field-note {
   font-size: 13px;
   color: var(--bad);
@@ -661,6 +668,13 @@ input[type='range'] {
     opacity: 0;
     transform: scale(0.95);
   }
+}
+
+.link-warning {
+  margin: 0;
+  font-size: 13px;
+  color: var(--gold-2);
+  text-align: center;
 }
 
 .form-error {

@@ -219,6 +219,7 @@ function checkImage() {
 const result = $('#result');
 const linkInput = input('link');
 const errorBox = $('#form-error');
+const linkWarning = $('#link-warning');
 const openLink = $('#open-link') as HTMLAnchorElement;
 openLink.innerHTML = icons.open;
 copyButton($('#copy-link') as HTMLButtonElement, () => linkInput.value);
@@ -247,6 +248,11 @@ form.addEventListener('submit', (e) => {
   }
   linkInput.value = link;
   openLink.href = link;
+  // A gift card number in the link makes the link itself worth guarding.
+  linkWarning.hidden = !gift.code.trim();
+  // Focus goes to the link, so a screen reader hears the warning with it.
+  if (linkWarning.hidden) linkInput.removeAttribute('aria-describedby');
+  else linkInput.setAttribute('aria-describedby', 'link-warning');
   result.hidden = false;
   if (!imageOk) {
     errorBox.textContent = 'The image may not show.';
@@ -262,6 +268,7 @@ form.addEventListener('submit', (e) => {
 // --- Sync ---------------------------------------------------------------------
 function changed(ribbonShape = false) {
   result.hidden = true;
+  linkWarning.hidden = true;
   errorBox.hidden = true;
   if (world && view && ribbonShape) {
     world.setRibbon(gift.ribbon.bow, gift.ribbon.width);
