@@ -70,6 +70,11 @@ canvas.scene {
   cursor: grab;
 }
 
+/* A lost WebGL context paints the canvas white (Chrome adds a broken-canvas icon); hiding it must win over display: block. */
+canvas.scene[hidden] {
+  display: none;
+}
+
 canvas.scene:active {
   cursor: grabbing;
 }
@@ -144,6 +149,11 @@ canvas.scene:active {
 .tag[hidden] {
   display: block;
   opacity: 0;
+}
+
+/* Until the first frame places it (shaders compile first), the tag would sit in the corner. */
+.tag:not([data-pinned]) {
+  visibility: hidden;
 }
 
 .tag-label {
@@ -285,6 +295,10 @@ body.open {
 }
 
 /* Flat fallback gift, for browsers without WebGL */
+.flat-hint {
+  cursor: pointer;
+}
+
 .flat-gift {
   width: 180px;
   height: 160px;

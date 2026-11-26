@@ -48,9 +48,14 @@ const tag = $('#tag');
 const canvas = $('#scene') as HTMLCanvasElement;
 let stage: Stage | null = null;
 
-if (webglAvailable()) {
-  const tier = detectTier();
-  stage = new Stage(canvas, { tier, fitRadius: 2.5, autoRotate: !prefersReducedMotion() });
+const tier = detectTier();
+try {
+  // Throws when the browser refuses a context (Chrome blocks WebGL for a site after a GPU reset).
+  if (webglAvailable()) stage = new Stage(canvas, { tier, fitRadius: 2.5, autoRotate: !prefersReducedMotion() });
+} catch {
+  stage = null;
+}
+if (stage) {
   const w = new World({ detail: tier, ornaments: tier === 'high' ? 70 : 55, bow: gift.ribbon.bow, ribbonWidth: gift.ribbon.width, unwrappable: false });
   world = w;
   view = new GiftView(stage.scene, w, tier);
@@ -70,7 +75,14 @@ if (webglAvailable()) {
     view!.sync(dt);
     if (!tag.hidden) pinToScene(tag, canvas, stage!.camera, tagPoint);
   });
-  stage.start();
+  // The form works without the preview. Hide the blank canvas (and the tag pinned to it) until the
+  // context comes back, but keep its space so the form does not jump while someone types.
+  const preview = $('.preview');
+  stage.onContext({
+    lost: () => (preview.style.visibility = 'hidden'),
+    restored: () => (preview.style.visibility = ''),
+  });
+  void stage.start();
 } else {
   $('.preview').hidden = true;
 }
