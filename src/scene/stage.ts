@@ -53,12 +53,18 @@ export function webglAvailable(): boolean {
 }
 
 const NO_SHADOWS_KEY = 'giftwrap:no-shadows';
+/** A remembered loss turns shadow maps off for this long; it may have had nothing to do with them. */
+const NO_SHADOWS_FOR_MS = 7 * 24 * 3600 * 1000;
+/** A loss in this visit, for when storage is blocked. */
+let lostWithShadows = false;
 
-/** The GPU's name, unmasked where the browser allows it. */
+/** The GPU's name: the plain RENDERER where it is real (Firefox), the unmasked one where it is not. */
 function gpuName(gl: WebGL2RenderingContext): string {
   try {
+    const plain = String(gl.getParameter(gl.RENDERER) ?? '');
+    if (!/^WebKit/i.test(plain)) return plain;
     const info = gl.getExtension('WEBGL_debug_renderer_info');
-    return String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? '');
+    return info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL) ?? '') : plain;
   } catch {
     return '';
   }
@@ -67,22 +73,27 @@ function gpuName(gl: WebGL2RenderingContext): string {
 /**
  * Whether to draw shadow maps. PowerVR D-Series GPUs (Pixel 10) lose the WebGL context within a few
  * frames of drawing with a shadow map, whatever its type, and Chrome then blocks WebGL for the site.
- * Any device that has lost a context in front of someone gets the same treatment from then on.
+ * Phones get the painted shadow whatever their GPU reports: browsers such as Brave may hide or
+ * randomise its name, and one missed match costs the site its WebGL until the browser restarts.
+ * Elsewhere, a context lost in front of someone turns them off for a while.
  */
-function shadowsAllowed(gl: WebGL2RenderingContext): boolean {
-  if (/PowerVR/i.test(gpuName(gl))) return false;
+function shadowsAllowed(gl: WebGL2RenderingContext, tier: Tier): boolean {
+  if (tier === 'low' || lostWithShadows) return false;
+  if (/PowerVR|Imagination/i.test(gpuName(gl))) return false;
   try {
-    return localStorage.getItem(NO_SHADOWS_KEY) === null;
+    const at = Number(localStorage.getItem(NO_SHADOWS_KEY));
+    return !(at && Date.now() - at < NO_SHADOWS_FOR_MS);
   } catch {
     return true;
   }
 }
 
 function rememberNoShadows() {
+  lostWithShadows = true;
   try {
-    localStorage.setItem(NO_SHADOWS_KEY, '1');
+    localStorage.setItem(NO_SHADOWS_KEY, String(Date.now()));
   } catch {
-    // Private mode or blocked storage: this visit still drops them on restore.
+    // Blocked storage: lostWithShadows still covers the restore and the rest of this visit.
   }
 }
 
@@ -133,7 +144,7 @@ export class Stage {
     r.outputColorSpace = SRGBColorSpace;
     r.toneMapping = ACESFilmicToneMapping;
     r.toneMappingExposure = 1.05;
-    this.shadows = shadowsAllowed(r.getContext() as WebGL2RenderingContext);
+    this.shadows = shadowsAllowed(r.getContext() as WebGL2RenderingContext, opts.tier);
     r.shadowMap.enabled = this.shadows;
     r.shadowMap.type = PCFShadowMap;
     if (!this.shadows) this.scene.add(paintedShadow());
@@ -228,7 +239,7 @@ export class Stage {
     const epoch = ++this.epoch;
     this.renderer.setAnimationLoop(null);
     // Every program is rebuilt now, so this is the moment to drop shadow maps if the loss came from them.
-    if (this.shadows && !shadowsAllowed(this.renderer.getContext() as WebGL2RenderingContext)) {
+    if (this.shadows && !shadowsAllowed(this.renderer.getContext() as WebGL2RenderingContext, this.tier)) {
       this.shadows = false;
       this.renderer.shadowMap.enabled = false;
       this.scene.add(paintedShadow());
@@ -321,11 +332,12 @@ function paintedShadow(): Mesh {
   g.fillStyle = grad;
   g.fillRect(0, 0, 128, 128);
   const mat = new MeshBasicMaterial({ color: '#000', alphaMap: new CanvasTexture(c), transparent: true, opacity: 0.55, depthWrite: false });
-  const m = new Mesh(new PlaneGeometry(3.4, 3.4), mat);
+  const m = new Mesh(new PlaneGeometry(3.6, 3.6), mat);
   m.rotation.x = -Math.PI / 2;
   // The key light is up at +x +z, so the shadow leans the other way.
-  m.position.set(-0.35, 0.004, -0.3);
-  m.renderOrder = 1;
+  m.position.set(-0.18, 0.004, -0.15);
+  // Ground first, then this, then the snow and sparks over both (transparent objects sort by renderOrder first).
+  m.renderOrder = -1;
   return m;
 }
 
@@ -343,6 +355,8 @@ function ground(): Mesh {
   const m = new Mesh(new CircleGeometry(7, 64), mat);
   m.rotation.x = -Math.PI / 2;
   m.receiveShadow = true;
+  // Under the painted shadow and the snow (see paintedShadow).
+  m.renderOrder = -2;
   return m;
 }
 
