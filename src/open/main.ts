@@ -90,12 +90,13 @@ function start(gift: Gift, payload: string): boolean {
   stage.onContext({
     lost: () => {
       tag.hidden = true;
-      // Once open, the card is on its way; a wrapped flat gift would undo the moment.
-      if (world.phase === 'open') {
+      // Once open (in 3D, or from the flat gift), the card is shown or on its way; a wrapped flat gift
+      // would undo the moment.
+      if (world.phase === 'open' || !$('#reveal').hidden) {
         canvas.hidden = true;
         return;
       }
-      const hadFocus = document.activeElement === canvas;
+      const hadFocus = document.activeElement === canvas || $('#message').contains(document.activeElement);
       const btn = flatGift(gift);
       if (hadFocus) btn.focus({ preventScroll: true });
     },
