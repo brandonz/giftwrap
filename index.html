@@ -38,7 +38,8 @@
           </div>
           <div class="field wide">
             <label for="code">Gift code <span class="optional">(optional)</span></label>
-            <input id="code" name="code" maxlength="80" spellcheck="false" autocapitalize="characters" />
+            <input id="code" name="code" maxlength="80" spellcheck="false" autocapitalize="characters" aria-describedby="code-hint" />
+            <p class="field-hint" id="code-hint">For attaching gift cards and other gift codes. Data is not saved.</p>
           </div>
           <div class="field wide" id="image-field">
             <label for="image">Image URL <span class="optional">(optional)</span></label>
@@ -81,6 +82,7 @@
 
         <button class="create" id="create" type="submit"><span id="create-icon"></span>Create</button>
         <div class="form-error" id="form-error" role="alert" hidden></div>
+        <p class="link-warning" id="link-warning" hidden>This link contains a gift code, only share it with the intended recipient.</p>
         <div class="result" id="result" hidden>
           <input id="link" readonly aria-label="Gift link" />
           <button class="icon-btn" id="copy-link" type="button" aria-label="Copy link" title="Copy"></button>
