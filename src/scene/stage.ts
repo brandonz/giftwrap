@@ -11,9 +11,11 @@ import {
   DirectionalLight,
   HemisphereLight,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   PCFShadowMap,
   PerspectiveCamera,
+  PlaneGeometry,
   PMREMGenerator,
   Points,
   PointsMaterial,
@@ -50,6 +52,40 @@ export function webglAvailable(): boolean {
   }
 }
 
+const NO_SHADOWS_KEY = 'giftwrap:no-shadows';
+
+/** The GPU's name, unmasked where the browser allows it. */
+function gpuName(gl: WebGL2RenderingContext): string {
+  try {
+    const info = gl.getExtension('WEBGL_debug_renderer_info');
+    return String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? '');
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Whether to draw shadow maps. PowerVR D-Series GPUs (Pixel 10) lose the WebGL context within a few
+ * frames of drawing with a shadow map, whatever its type, and Chrome then blocks WebGL for the site.
+ * Any device that has lost a context in front of someone gets the same treatment from then on.
+ */
+function shadowsAllowed(gl: WebGL2RenderingContext): boolean {
+  if (/PowerVR/i.test(gpuName(gl))) return false;
+  try {
+    return localStorage.getItem(NO_SHADOWS_KEY) === null;
+  } catch {
+    return true;
+  }
+}
+
+function rememberNoShadows() {
+  try {
+    localStorage.setItem(NO_SHADOWS_KEY, '1');
+  } catch {
+    // Private mode or blocked storage: this visit still drops them on restore.
+  }
+}
+
 export interface StageOptions {
   tier: Tier;
   /** Radius around the gift the camera keeps in view. */
@@ -83,6 +119,8 @@ export class Stage {
   private readonly contextHooks: ContextHooks[] = [];
   /** Bumped by each restore, so a slower earlier warm-up does not restart the loop. */
   private epoch = 0;
+  /** Shadow maps on; otherwise a painted shadow sits under the gift. */
+  private shadows: boolean;
 
   constructor(readonly canvas: HTMLCanvasElement, opts: StageOptions) {
     this.tier = opts.tier;
@@ -95,8 +133,10 @@ export class Stage {
     r.outputColorSpace = SRGBColorSpace;
     r.toneMapping = ACESFilmicToneMapping;
     r.toneMappingExposure = 1.05;
-    r.shadowMap.enabled = true;
+    this.shadows = shadowsAllowed(r.getContext() as WebGL2RenderingContext);
+    r.shadowMap.enabled = this.shadows;
     r.shadowMap.type = PCFShadowMap;
+    if (!this.shadows) this.scene.add(paintedShadow());
 
     this.buildEnvironment();
     this.scene.environmentIntensity = 0.55;
@@ -140,6 +180,8 @@ export class Stage {
     // Mobile GPUs reset under load, and browsers drop contexts to reclaim memory. three.js calls
     // preventDefault() so the context can come back; the pages decide what to show meanwhile.
     canvas.addEventListener('webglcontextlost', () => {
+      // A background tab's context is reclaimed for memory; that says nothing about the shadows.
+      if (this.shadows && document.visibilityState === 'visible') rememberNoShadows();
       for (const h of this.contextHooks) h.lost?.();
     });
     canvas.addEventListener('webglcontextrestored', () => void this.recover());
@@ -185,6 +227,12 @@ export class Stage {
   private async recover() {
     const epoch = ++this.epoch;
     this.renderer.setAnimationLoop(null);
+    // Every program is rebuilt now, so this is the moment to drop shadow maps if the loss came from them.
+    if (this.shadows && !shadowsAllowed(this.renderer.getContext() as WebGL2RenderingContext)) {
+      this.shadows = false;
+      this.renderer.shadowMap.enabled = false;
+      this.scene.add(paintedShadow());
+    }
     // three.js re-uploads meshes and textures by itself, but render-target contents are gone.
     this.buildEnvironment();
     await this.warmUp();
@@ -259,6 +307,26 @@ export class Stage {
     this.controls.maxDistance = dist * 1.4;
     cam.updateProjectionMatrix();
   }
+}
+
+/** A soft dark patch under the gift, cast away from the key light, for when there are no shadow maps. */
+function paintedShadow(): Mesh {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, 'rgba(0,0,0,1)');
+  grad.addColorStop(0.5, 'rgba(0,0,0,0.8)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  const mat = new MeshBasicMaterial({ color: '#000', alphaMap: new CanvasTexture(c), transparent: true, opacity: 0.55, depthWrite: false });
+  const m = new Mesh(new PlaneGeometry(3.4, 3.4), mat);
+  m.rotation.x = -Math.PI / 2;
+  // The key light is up at +x +z, so the shadow leans the other way.
+  m.position.set(-0.35, 0.004, -0.3);
+  m.renderOrder = 1;
+  return m;
 }
 
 function ground(): Mesh {
