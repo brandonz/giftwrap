@@ -75,10 +75,12 @@ if (stage) {
     view!.sync(dt);
     if (!tag.hidden) pinToScene(tag, canvas, stage!.camera, tagPoint);
   });
-  // The form works without the preview; hide a blank canvas until the context comes back.
+  // The form works without the preview. Hide the blank canvas (and the tag pinned to it) until the
+  // context comes back, but keep its space so the form does not jump while someone types.
+  const preview = $('.preview');
   stage.onContext({
-    lost: () => ($('.preview').hidden = true),
-    restored: () => ($('.preview').hidden = false),
+    lost: () => (preview.style.visibility = 'hidden'),
+    restored: () => (preview.style.visibility = ''),
   });
   void stage.start();
 } else {

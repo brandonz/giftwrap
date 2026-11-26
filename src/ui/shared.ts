@@ -56,6 +56,7 @@ export function pinToScene(el: HTMLElement, canvas: HTMLCanvasElement, camera: P
   const x = (v.x * 0.5 + 0.5) * r.width;
   const y = (-v.y * 0.5 + 0.5) * r.height;
   el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+  el.dataset.pinned = '';
 }
 
 /** Fills a gift tag. Returns false when there is nothing to show. */

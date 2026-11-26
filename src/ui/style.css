@@ -151,6 +151,11 @@ canvas.scene:active {
   opacity: 0;
 }
 
+/* Until the first frame places it (shaders compile first), the tag would sit in the corner. */
+.tag:not([data-pinned]) {
+  visibility: hidden;
+}
+
 .tag-label {
   font-size: 11px;
   letter-spacing: 0.08em;
@@ -290,6 +295,10 @@ body.open {
 }
 
 /* Flat fallback gift, for browsers without WebGL */
+.flat-hint {
+  cursor: pointer;
+}
+
 .flat-gift {
   width: 180px;
   height: 160px;

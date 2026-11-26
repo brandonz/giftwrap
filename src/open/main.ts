@@ -90,15 +90,24 @@ function start(gift: Gift, payload: string): boolean {
   stage.onContext({
     lost: () => {
       tag.hidden = true;
-      if ($('#reveal').hidden) flatGift(gift);
-      else canvas.hidden = true;
+      // Once open, the card is on its way; a wrapped flat gift would undo the moment.
+      if (world.phase === 'open') {
+        canvas.hidden = true;
+        return;
+      }
+      const hadFocus = document.activeElement === canvas;
+      const btn = flatGift(gift);
+      if (hadFocus) btn.focus({ preventScroll: true });
     },
     restored: () => {
       // Opened from the flat gift: the 3D one behind the card would still be wrapped.
       if (!$('#reveal').hidden && world.phase !== 'open') return;
-      $('#message').hidden = true;
+      const box = $('#message');
+      const hadFocus = box.contains(document.activeElement);
+      box.hidden = true;
       canvas.hidden = false;
       tag.hidden = !hasTag || world.phase !== 'tied';
+      if (hadFocus) canvas.focus({ preventScroll: true });
     },
   });
 
@@ -109,6 +118,8 @@ function start(gift: Gift, payload: string): boolean {
 
 function reveal(gift: Gift) {
   const card = $('#reveal');
+  // The flat gift and the 3D one can both ask (a context lost while opening); wire the card once.
+  if (!card.hidden) return;
   const names = $('#names');
   names.replaceChildren();
   for (const [label, value] of [
@@ -165,8 +176,8 @@ function showMessage(text: string) {
   $('#scene').hidden = true;
 }
 
-/** No WebGL: a flat gift that opens on tap. */
-function flatGift(gift: Gift) {
+/** No WebGL: a flat gift that opens on tap. Returns its button. */
+function flatGift(gift: Gift): HTMLButtonElement {
   const box = $('#message');
   const btn = document.createElement('button');
   btn.className = 'flat-gift';
@@ -176,11 +187,14 @@ function flatGift(gift: Gift) {
     box.hidden = true;
     reveal(gift);
   };
-  // Without a label it reads as a picture, not something to tap.
+  // Without a label it reads as a picture, not something to tap. The button has its own aria-label.
   const hint = document.createElement('p');
-  hint.textContent = 'Tap to open';
+  hint.className = 'flat-hint';
+  hint.textContent = matchMedia('(pointer: coarse)').matches ? 'Tap to open' : 'Click to open';
   hint.setAttribute('aria-hidden', 'true');
+  hint.onclick = () => btn.click();
   box.replaceChildren(btn, hint);
   box.hidden = false;
   $('#scene').hidden = true;
+  return btn;
 }

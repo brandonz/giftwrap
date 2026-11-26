@@ -81,6 +81,8 @@ export class Stage {
   private slowFrames = 0;
   private dprCap: number;
   private readonly contextHooks: ContextHooks[] = [];
+  /** Bumped by each restore, so a slower earlier warm-up does not restart the loop. */
+  private epoch = 0;
 
   constructor(readonly canvas: HTMLCanvasElement, opts: StageOptions) {
     this.tier = opts.tier;
@@ -140,12 +142,7 @@ export class Stage {
     canvas.addEventListener('webglcontextlost', () => {
       for (const h of this.contextHooks) h.lost?.();
     });
-    canvas.addEventListener('webglcontextrestored', () => {
-      // three.js re-uploads meshes and textures by itself, but render-target contents are gone.
-      this.buildEnvironment();
-      this.renderer.shadowMap.needsUpdate = true;
-      for (const h of this.contextHooks) h.restored?.();
-    });
+    canvas.addEventListener('webglcontextrestored', () => void this.recover());
 
     new ResizeObserver(() => this.resize()).observe(canvas);
     this.resize();
@@ -176,11 +173,35 @@ export class Stage {
    * every program and drawing in one GPU task is the heaviest moment of the page.
    */
   async start() {
+    const epoch = this.epoch;
+    await this.warmUp();
+    if (epoch === this.epoch) this.loop();
+  }
+
+  /**
+   * After a restore every program is recompiled and the environment re-rendered: the same peak as the
+   * first load, so it gets the same treatment. The page keeps its fallback up until this is done.
+   */
+  private async recover() {
+    const epoch = ++this.epoch;
+    this.renderer.setAnimationLoop(null);
+    // three.js re-uploads meshes and textures by itself, but render-target contents are gone.
+    this.buildEnvironment();
+    await this.warmUp();
+    if (epoch !== this.epoch || this.renderer.getContext().isContextLost()) return;
+    this.loop();
+    for (const h of this.contextHooks) h.restored?.();
+  }
+
+  private async warmUp() {
     try {
       await this.renderer.compileAsync(this.scene, this.camera);
     } catch {
       // The first frame compiles whatever is left.
     }
+  }
+
+  private loop() {
     this.renderer.setAnimationLoop((t) => this.frame(t / 1000));
   }
 
