@@ -70,6 +70,11 @@ canvas.scene {
   cursor: grab;
 }
 
+/* A lost WebGL context paints the canvas white (Chrome adds a broken-canvas icon); hiding it must win over display: block. */
+canvas.scene[hidden] {
+  display: none;
+}
+
 canvas.scene:active {
   cursor: grabbing;
 }

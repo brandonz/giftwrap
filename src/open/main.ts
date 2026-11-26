@@ -18,15 +18,22 @@ if (!payload) {
 } else {
   const result = decodeGift(payload);
   if (!result.ok) showMessage(result.reason === 'version' ? 'This gift needs a newer page. Try reloading.' : 'This link is broken.');
-  else if (!webglAvailable()) flatGift(result.gift);
-  else start(result.gift, payload);
+  // Without WebGL, or when the browser refuses a context (Chrome blocks WebGL for a site after a
+  // GPU reset), the gift still opens: a flat one.
+  else if (!webglAvailable() || !start(result.gift, payload)) flatGift(result.gift);
 }
 
-function start(gift: Gift, payload: string) {
+/** Runs the 3D gift. False if WebGL could not start. */
+function start(gift: Gift, payload: string): boolean {
   const tier = detectTier();
   const reduced = prefersReducedMotion();
   const canvas = $('#scene') as HTMLCanvasElement;
-  const stage = new Stage(canvas, { tier, fitRadius: 2.7 });
+  let stage: Stage;
+  try {
+    stage = new Stage(canvas, { tier, fitRadius: 2.7 });
+  } catch {
+    return false;
+  }
   const world = new World({
     detail: tier,
     ornaments: tier === 'high' ? 90 : 65,
@@ -78,8 +85,26 @@ function start(gift: Gift, payload: string) {
     view.sync(dt);
     if (!tag.hidden) pinToScene(tag, canvas, stage.camera, tagPoint);
   });
-  stage.start();
+  // A lost context leaves a blank canvas (or the browser's broken-canvas icon). Show the flat gift
+  // until it comes back; if it never does, the flat gift still opens.
+  stage.onContext({
+    lost: () => {
+      tag.hidden = true;
+      if ($('#reveal').hidden) flatGift(gift);
+      else canvas.hidden = true;
+    },
+    restored: () => {
+      // Opened from the flat gift: the 3D one behind the card would still be wrapped.
+      if (!$('#reveal').hidden && world.phase !== 'open') return;
+      $('#message').hidden = true;
+      canvas.hidden = false;
+      tag.hidden = !hasTag || world.phase !== 'tied';
+    },
+  });
+
+  void stage.start();
   canvas.focus({ preventScroll: true });
+  return true;
 }
 
 function reveal(gift: Gift) {
@@ -121,6 +146,7 @@ function reveal(gift: Gift) {
   replay.onclick = () => location.reload();
   $('#make').innerHTML = icons.gift;
 
+  $('#message').hidden = true;
   card.hidden = false;
 }
 
@@ -150,7 +176,11 @@ function flatGift(gift: Gift) {
     box.hidden = true;
     reveal(gift);
   };
-  box.replaceChildren(btn);
+  // Without a label it reads as a picture, not something to tap.
+  const hint = document.createElement('p');
+  hint.textContent = 'Tap to open';
+  hint.setAttribute('aria-hidden', 'true');
+  box.replaceChildren(btn, hint);
   box.hidden = false;
   $('#scene').hidden = true;
 }

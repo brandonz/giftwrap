@@ -44,8 +44,9 @@ export class GiftView {
   private readonly glowMat: MeshStandardMaterial;
   private readonly paperGeo: BufferGeometry;
   private ribbonGeo!: BufferGeometry;
-  private readonly paperMat: MeshPhysicalMaterial;
-  private readonly ribbonMat: MeshPhysicalMaterial;
+  // Physical (clearcoat, sheen) on the high tier; standard on phones, whose GPUs pay for every extra lobe.
+  private readonly paperMat: MeshStandardMaterial;
+  private readonly ribbonMat: MeshStandardMaterial;
   private readonly patternCanvas = document.createElement('canvas');
   private readonly patternTex: CanvasTexture;
   private paperStyle: PaperStyle | null = null;
@@ -75,7 +76,10 @@ export class GiftView {
     this.patternTex.colorSpace = SRGBColorSpace;
     this.patternTex.wrapS = this.patternTex.wrapT = RepeatWrapping;
     this.patternTex.anisotropy = 8;
-    this.paperMat = new MeshPhysicalMaterial({ map: this.patternTex, side: FrontSide, roughness: 0.8 });
+    const physical = tier === 'high';
+    this.paperMat = physical
+      ? new MeshPhysicalMaterial({ map: this.patternTex, side: FrontSide, roughness: 0.8 })
+      : new MeshStandardMaterial({ map: this.patternTex, side: FrontSide, roughness: 0.8 });
     const backMat = new MeshStandardMaterial({ color: '#f5efe4', roughness: 0.92, side: BackSide });
 
     const paper = world.paper;
@@ -91,13 +95,17 @@ export class GiftView {
     this.paperFront.receiveShadow = true;
     this.paperBack.receiveShadow = true;
 
-    this.ribbonMat = new MeshPhysicalMaterial({ side: DoubleSide, roughness: 0.4, sheen: 1, sheenRoughness: 0.35 });
+    this.ribbonMat = physical
+      ? new MeshPhysicalMaterial({ side: DoubleSide, roughness: 0.4, sheen: 1, sheenRoughness: 0.35 })
+      : new MeshStandardMaterial({ side: DoubleSide, roughness: 0.4 });
     this.knot = new Mesh(new SphereGeometry(0.1, 20, 14), this.ribbonMat);
     this.knot.scale.set(1.1, 0.6, 1.1);
     this.knot.castShadow = true;
 
     const ornGeo = tier === 'high' ? new SphereGeometry(1, 28, 20) : new SphereGeometry(1, 18, 12);
-    const ornMat = new MeshPhysicalMaterial({ roughness: 0.12, metalness: 0.35, clearcoat: 1, clearcoatRoughness: 0.08 });
+    const ornMat = physical
+      ? new MeshPhysicalMaterial({ roughness: 0.12, metalness: 0.35, clearcoat: 1, clearcoatRoughness: 0.08 })
+      : new MeshStandardMaterial({ roughness: 0.12, metalness: 0.35 });
     const o = world.ornaments;
     this.ornaments = new InstancedMesh(ornGeo, ornMat, o.count);
     this.ornaments.castShadow = true;
@@ -142,8 +150,10 @@ export class GiftView {
     // matte, gloss, foil
     m.roughness = [0.85, 0.32, 0.28][p.finish] ?? 0.85;
     m.metalness = [0, 0, 0.85][p.finish] ?? 0;
-    m.clearcoat = [0, 1, 0.4][p.finish] ?? 0;
-    m.clearcoatRoughness = 0.12;
+    if (m instanceof MeshPhysicalMaterial) {
+      m.clearcoat = [0, 1, 0.4][p.finish] ?? 0;
+      m.clearcoatRoughness = 0.12;
+    }
     m.needsUpdate = true;
     this.paperStyle = { ...p };
   }
@@ -155,9 +165,11 @@ export class GiftView {
     // satin, velvet, metallic
     m.roughness = [0.38, 0.85, 0.25][r.finish] ?? 0.38;
     m.metalness = [0, 0, 0.9][r.finish] ?? 0;
-    m.sheen = [1, 1, 0][r.finish] ?? 1;
-    m.sheenColor.copy(c).lerp(new Color('#ffffff'), r.finish === 1 ? 0.15 : 0.5);
-    m.sheenRoughness = r.finish === 1 ? 0.8 : 0.3;
+    if (m instanceof MeshPhysicalMaterial) {
+      m.sheen = [1, 1, 0][r.finish] ?? 1;
+      m.sheenColor.copy(c).lerp(new Color('#ffffff'), r.finish === 1 ? 0.15 : 0.5);
+      m.sheenRoughness = r.finish === 1 ? 0.8 : 0.3;
+    }
     m.needsUpdate = true;
   }
 

@@ -41,7 +41,10 @@ export function prefersReducedMotion(): boolean {
 export function webglAvailable(): boolean {
   try {
     const c = document.createElement('canvas');
-    return !!c.getContext('webgl2');
+    const gl = c.getContext('webgl2');
+    // Give the probe context back at once: browsers cap live contexts per page.
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    return !!gl;
   } catch {
     return false;
   }
@@ -55,6 +58,13 @@ export interface StageOptions {
 }
 
 type FrameFn = (dt: number, t: number) => void;
+
+export interface ContextHooks {
+  /** The GPU dropped the WebGL context (a GPU reset, or the browser reclaiming memory). The canvas shows nothing until it is restored. */
+  lost?: () => void;
+  /** The context is back and the scene renders again. */
+  restored?: () => void;
+}
 
 export class Stage {
   readonly renderer: WebGLRenderer;
@@ -70,10 +80,12 @@ export class Stage {
   private last = 0;
   private slowFrames = 0;
   private dprCap: number;
+  private readonly contextHooks: ContextHooks[] = [];
 
   constructor(readonly canvas: HTMLCanvasElement, opts: StageOptions) {
     this.tier = opts.tier;
     this.fitRadius = opts.fitRadius;
+    // Throws if the context cannot be created (for example, WebGL blocked for this site after a GPU reset).
     const r = new WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
     this.renderer = r;
     this.dprCap = opts.tier === 'high' ? 2 : 1.5;
@@ -84,10 +96,8 @@ export class Stage {
     r.shadowMap.enabled = true;
     r.shadowMap.type = PCFShadowMap;
 
-    const pmrem = new PMREMGenerator(r);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.buildEnvironment();
     this.scene.environmentIntensity = 0.55;
-    pmrem.dispose();
 
     this.scene.add(new HemisphereLight(0xbcd2ff, 0x3a2414, 0.7));
     const key = new DirectionalLight(0xffe3bd, 2.4);
@@ -125,8 +135,31 @@ export class Stage {
     c.autoRotateSpeed = 0.6;
     this.controls = c;
 
+    // Mobile GPUs reset under load, and browsers drop contexts to reclaim memory. three.js calls
+    // preventDefault() so the context can come back; the pages decide what to show meanwhile.
+    canvas.addEventListener('webglcontextlost', () => {
+      for (const h of this.contextHooks) h.lost?.();
+    });
+    canvas.addEventListener('webglcontextrestored', () => {
+      // three.js re-uploads meshes and textures by itself, but render-target contents are gone.
+      this.buildEnvironment();
+      this.renderer.shadowMap.needsUpdate = true;
+      for (const h of this.contextHooks) h.restored?.();
+    });
+
     new ResizeObserver(() => this.resize()).observe(canvas);
     this.resize();
+  }
+
+  onContext(hooks: ContextHooks) {
+    this.contextHooks.push(hooks);
+  }
+
+  private buildEnvironment() {
+    this.scene.environment?.dispose();
+    const pmrem = new PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmrem.dispose();
   }
 
   onFrame(fn: FrameFn) {
@@ -138,7 +171,16 @@ export class Stage {
     this.snowBoost = seconds;
   }
 
-  start() {
+  /**
+   * Starts the render loop. Shaders are compiled first and off the first frame: on phones, compiling
+   * every program and drawing in one GPU task is the heaviest moment of the page.
+   */
+  async start() {
+    try {
+      await this.renderer.compileAsync(this.scene, this.camera);
+    } catch {
+      // The first frame compiles whatever is left.
+    }
     this.renderer.setAnimationLoop((t) => this.frame(t / 1000));
   }
 
