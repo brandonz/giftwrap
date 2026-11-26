@@ -130,6 +130,8 @@ export class Stage {
   private readonly contextHooks: ContextHooks[] = [];
   /** Bumped by each restore, so a slower earlier warm-up does not restart the loop. */
   private epoch = 0;
+  /** Settles start()'s promise once the first frame is drawn. */
+  private onDrawn: (() => void) | null = null;
   /** Shadow maps on; otherwise a painted shadow sits under the gift. */
   private shadows: boolean;
 
@@ -223,12 +225,17 @@ export class Stage {
 
   /**
    * Starts the render loop. Shaders are compiled first and off the first frame: on phones, compiling
-   * every program and drawing in one GPU task is the heaviest moment of the page.
+   * every program and drawing in one GPU task is the heaviest moment of the page. Resolves once a
+   * frame has drawn the gift (if the context is lost first, once one does after the restore), so the
+   * page can keep its loading state up until there is a gift to see. Call it once.
    */
-  async start() {
+  start(): Promise<void> {
     const epoch = this.epoch;
-    await this.warmUp();
-    if (epoch === this.epoch) this.loop();
+    const drawn = new Promise<void>((resolve) => (this.onDrawn = resolve));
+    void this.warmUp().then(() => {
+      if (epoch === this.epoch) this.loop();
+    });
+    return drawn;
   }
 
   /**
@@ -272,6 +279,11 @@ export class Stage {
     this.updateSnow(dt);
     this.controls.update(dt);
     this.renderer.render(this.scene, this.camera);
+    // A lost context draws nothing, and three.js keeps the loop running through it.
+    if (this.onDrawn && !this.renderer.getContext().isContextLost()) {
+      this.onDrawn();
+      this.onDrawn = null;
+    }
   }
 
   /** Lowers the pixel ratio if frames keep running long. */

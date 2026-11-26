@@ -229,12 +229,36 @@ body.open {
   overflow-wrap: anywhere;
 }
 
-.reveal img {
+/* Holds the image's place in the card; while it is still loading, a placeholder of a set shape. */
+.image-frame {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.image-frame img {
+  display: block;
   width: 100%;
   max-height: 38dvh;
   object-fit: contain;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.04);
+}
+
+.image-frame[data-state='loading'] {
+  aspect-ratio: 4 / 3;
+  max-height: 38dvh;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0.04) 30%, rgba(255, 255, 255, 0.1) 50%, rgba(255, 255, 255, 0.04) 70%) 0 0 / 300% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+.image-frame[data-state='loading'] img {
+  display: none;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -150% 0;
+  }
 }
 
 .code-row {
@@ -285,6 +309,60 @@ body.open {
   margin: 0;
   font-size: 18px;
   color: var(--muted);
+}
+
+/* Up until the first 3D frame is drawn (or a fallback takes over). Plain HTML and CSS, so it shows
+   while the script is still downloading. */
+.loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 16px;
+  color: var(--muted);
+  font-size: 15px;
+  pointer-events: none;
+  transition: opacity 0.35s;
+}
+
+.loading[data-done] {
+  opacity: 0;
+}
+
+/* Held back a moment, so a quick load goes straight to the gift without a flash. */
+.loading > * {
+  animation: fade-in 0.4s 0.3s backwards;
+}
+
+.loading-gift {
+  width: 64px;
+  height: 56px;
+  border-radius: 6px;
+  background:
+    linear-gradient(90deg, transparent 43%, var(--gold) 43% 57%, transparent 57%),
+    linear-gradient(0deg, transparent 43%, var(--gold) 43% 57%, transparent 57%),
+    #b01e2a;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+}
+
+/* The bob joins the fade-in: both are listed, so the fade-in above is not replaced. */
+.loading > .loading-gift {
+  animation:
+    fade-in 0.4s 0.3s backwards,
+    bob 1.2s 0.3s ease-in-out infinite alternate;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes bob {
+  to {
+    transform: translateY(-10px) rotate(-4deg);
+  }
 }
 
 /* Flat fallback gift, for browsers without WebGL */
@@ -628,5 +706,11 @@ input[type='range'] {
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /* Endless loops at that duration would flicker: run them once, which leaves them still. */
+  .loading > .loading-gift,
+  .image-frame[data-state='loading'] {
+    animation-iteration-count: 1 !important;
   }
 }

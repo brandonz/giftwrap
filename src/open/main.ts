@@ -7,9 +7,13 @@ import { detectTier, prefersReducedMotion, Stage, webglAvailable } from '../scen
 import { GIFT, TOP } from '../sim/dims';
 import { World } from '../sim/world';
 import { icons } from '../ui/icons';
-import { $, copyButton, fillTag, pinToScene, seedFrom } from '../ui/shared';
+import { $, copyButton, fillTag, hideLoader, pinToScene, seedFrom } from '../ui/shared';
 
 const payload = location.hash.slice(1);
+/** The gift's image, fetched from the start: 'none' when the gift has none. */
+let image: 'none' | 'loading' | 'ready' | 'failed' = 'none';
+/** Set once the 3D gift is drawn (or there is none): decoding the image waits for that. */
+let decodeImage = false;
 // A different gift pasted into the same tab only changes the hash; start over with it.
 window.addEventListener('hashchange', () => location.reload());
 if (!payload) {
@@ -18,9 +22,12 @@ if (!payload) {
 } else {
   const result = decodeGift(payload);
   if (!result.ok) showMessage(result.reason === 'version' ? 'This gift needs a newer page. Try reloading.' : 'This link is broken.');
-  // Without WebGL, or when the browser refuses a context (Chrome blocks WebGL for a site after a
-  // GPU reset), the gift still opens: a flat one.
-  else if (!webglAvailable() || !start(result.gift, payload)) flatGift(result.gift);
+  else {
+    preloadImage(result.gift);
+    // Without WebGL, or when the browser refuses a context (Chrome blocks WebGL for a site after a
+    // GPU reset), the gift still opens: a flat one.
+    if (!webglAvailable() || !start(result.gift, payload)) flatGift(result.gift);
+  }
 }
 
 /** Runs the 3D gift. False if WebGL could not start. */
@@ -112,7 +119,10 @@ function start(gift: Gift, payload: string): boolean {
     },
   });
 
-  void stage.start();
+  void stage.start().then(() => {
+    hideLoader();
+    warmImage();
+  });
   canvas.focus({ preventScroll: true });
   return true;
 }
@@ -140,13 +150,10 @@ function reveal(gift: Gift) {
   title.textContent = gift.title;
   title.hidden = !gift.title;
 
-  const img = $('#image') as HTMLImageElement;
-  if (gift.image) {
-    img.onerror = () => (img.hidden = true);
-    img.onload = () => (img.hidden = false);
-    img.alt = gift.title || '';
-    img.src = gift.image;
-  }
+  // Usually here already. If not, a placeholder keeps its place until it is (see imageSettled).
+  const frame = $('#image-frame');
+  if (image === 'loading') frame.dataset.state = 'loading';
+  frame.hidden = image === 'none' || image === 'failed';
 
   const codeRow = $('#code-row');
   $('#code').textContent = gift.code;
@@ -162,6 +169,55 @@ function reveal(gift: Gift) {
   card.hidden = false;
 }
 
+/**
+ * Fetches the gift's image while the gift is still wrapped, so it is in the card the moment it opens
+ * rather than popping in after.
+ */
+function preloadImage(gift: Gift) {
+  if (!gift.image) return;
+  image = 'loading';
+  const img = $('#image') as HTMLImageElement;
+  img.alt = gift.title || '';
+  img.onload = () => {
+    imageSettled(true);
+    if (decodeImage) decode(img);
+  };
+  img.onerror = () => imageSettled(false);
+  img.src = gift.image;
+}
+
+/**
+ * Decodes the loaded image ahead of the card, so it is drawn in the card's first frame. Not before the
+ * 3D gift is up: a large photo's bitmap on top of shader compiling is what resets phone GPUs.
+ */
+function warmImage() {
+  decodeImage = true;
+  if (image === 'ready') decode($('#image') as HTMLImageElement);
+}
+
+/** Best effort: a refusal only means the card decodes it when drawn, as before. */
+function decode(img: HTMLImageElement) {
+  img.decode().catch(() => {});
+}
+
+function imageSettled(ok: boolean) {
+  const img = $('#image') as HTMLImageElement;
+  const frame = $('#image-frame');
+  image = ok ? 'ready' : 'failed';
+  // Not open yet: reveal() shows it (or leaves it out).
+  if (frame.dataset.state !== 'loading') return;
+  // The card is up with the placeholder: ease it to the image's shape (or away), then fade the image in.
+  const from = frame.offsetHeight;
+  // A broken image would draw its alt text and icon while the frame closes.
+  img.hidden = !ok;
+  delete frame.dataset.state;
+  const to = ok ? frame.offsetHeight : 0;
+  const done = () => (frame.hidden = !ok);
+  if (prefersReducedMotion()) return done();
+  frame.animate({ height: [`${from}px`, `${to}px`] }, { duration: 300, easing: 'ease-out' }).finished.then(done, done);
+  if (ok) img.animate({ opacity: [0, 1] }, { duration: 300, delay: 150, fill: 'backwards' });
+}
+
 function showMessage(text: string) {
   const box = $('#message');
   const p = document.createElement('p');
@@ -175,6 +231,7 @@ function showMessage(text: string) {
   box.replaceChildren(p, a);
   box.hidden = false;
   $('#scene').hidden = true;
+  hideLoader(false);
 }
 
 /** No WebGL: a flat gift that opens on tap. Returns its button. */
@@ -197,5 +254,7 @@ function flatGift(gift: Gift): HTMLButtonElement {
   box.replaceChildren(btn, hint);
   box.hidden = false;
   $('#scene').hidden = true;
+  hideLoader(false);
+  warmImage();
   return btn;
 }

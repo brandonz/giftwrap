@@ -85,3 +85,15 @@ export function seedFrom(text: string): number {
   for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
   return (h >>> 0) % 100000 || 7;
 }
+
+/**
+ * Takes down the loading placeholder: the 3D gift is drawn (it fades out over it) or a fallback is
+ * shown in its place (it goes at once, so the two do not overlap).
+ */
+export function hideLoader(fade = true) {
+  const el = document.getElementById('loading');
+  if (!el || el.dataset.done !== undefined) return;
+  el.dataset.done = '';
+  if (fade) setTimeout(() => el.remove(), 400);
+  else el.remove();
+}
