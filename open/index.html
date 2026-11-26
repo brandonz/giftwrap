@@ -13,10 +13,13 @@
     <main>
       <canvas id="scene" class="scene" tabindex="0" aria-label="Wrapped gift. Pull the bow, then tear the paper. Space or Enter works too."></canvas>
       <div id="tag" class="tag" hidden></div>
+      <div id="loading" class="loading" role="status"><span class="loading-gift" aria-hidden="true"></span><span>Getting your gift ready</span></div>
       <section id="reveal" class="reveal" hidden aria-live="polite">
         <div class="names" id="names"></div>
         <h1 id="title" hidden></h1>
-        <img id="image" alt="" hidden referrerpolicy="no-referrer" decoding="async" />
+        <div id="image-frame" class="image-frame" hidden>
+          <img id="image" alt="" referrerpolicy="no-referrer" decoding="async" />
+        </div>
         <div class="code-row" id="code-row" hidden>
           <div class="code" id="code"></div>
           <button class="icon-btn" id="copy" type="button" aria-label="Copy code" title="Copy"></button>

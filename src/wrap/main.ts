@@ -19,7 +19,7 @@ import { detectTier, prefersReducedMotion, Stage, webglAvailable } from '../scen
 import { GIFT, TOP } from '../sim/dims';
 import { World } from '../sim/world';
 import { icons } from '../ui/icons';
-import { $, copyButton, fillTag, pinToScene } from '../ui/shared';
+import { $, copyButton, fillTag, hideLoader, pinToScene } from '../ui/shared';
 
 const DRAFT_KEY = 'giftwrap:draft';
 
@@ -82,7 +82,7 @@ if (stage) {
     lost: () => (preview.style.visibility = 'hidden'),
     restored: () => (preview.style.visibility = ''),
   });
-  void stage.start();
+  void stage.start().then(() => hideLoader());
 } else {
   $('.preview').hidden = true;
 }
