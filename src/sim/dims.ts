@@ -12,3 +12,7 @@ export const RIBBON_OFFSET = 0.022;
 export const TOP = GIFT.cy + GIFT.hy;
 /** Ornaments stay inside this radius. */
 export const PIT_RADIUS = 3.4;
+/** Wall and floor thickness of the open base, and of the lid's top and skirt. */
+export const WALL = 0.035;
+/** Height of the top of the base's inner floor. */
+export const FLOOR = BASE.cy - BASE.hy + WALL;

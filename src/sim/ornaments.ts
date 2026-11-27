@@ -1,7 +1,7 @@
 // Glass ornaments: spheres in a pit around the gift, with a pointer you can push and throw them with.
 
-import { pushOutOfBox, type Aabb, type SphereSet } from './cloth';
-import { PIT_RADIUS } from './dims';
+import { onTop, pushOutOfBox, pushSphereOutOfBox, type Collider, type SphereSet } from './cloth';
+import { PIT_RADIUS, WALL } from './dims';
 import type { Lid } from './lid';
 import { rng } from './rng';
 
@@ -33,7 +33,7 @@ export class Ornaments implements SphereSet {
   }
 
   /** Lets the pile settle before the first frame is shown. */
-  settle(box: Aabb, seconds: number) {
+  settle(box: Collider, seconds: number) {
     for (let t = 0; t < seconds * 60; t++) this.step(1 / 60, box, null);
     this.vel.fill(0);
   }
@@ -50,15 +50,16 @@ export class Ornaments implements SphereSet {
     }
   }
 
-  step(dt: number, box: Aabb, lid: Lid | null) {
+  step(dt: number, box: Collider, lid: Lid | null) {
     const sub = 2;
     const h = dt / sub;
     for (let s = 0; s < sub; s++) this.substep(h, box, lid);
   }
 
-  private substep(h: number, box: Aabb, lid: Lid | null) {
+  private substep(h: number, box: Collider, lid: Lid | null) {
     const { pos: x, vel: v, radius: rad, count } = this;
     const prev = x.slice();
+    const floor = 'floor' in box ? box.floor : null;
     for (let i = 0; i < count; i++) {
       const k = 3 * i;
       if (i === this.grabbed) {
@@ -141,15 +142,21 @@ export class Ornaments implements SphereSet {
           x[k + 2] += ez * c;
         }
       }
-      pushOutOfBox(x, k, box, r);
+      if ('floor' in box) {
+        // Thin walls: inflated like a solid box, a wall would hold a ball up past the rim, over the opening.
+        // The true contact, with the rim rounded, lets it roll off.
+        pushSphereOutOfBox(x, k, box.floor, r);
+        for (const b of box.walls) pushSphereOutOfBox(x, k, b, r, WALL / 2);
+      } else pushOutOfBox(x, k, box, r);
       if (lid) lid.pushOut(x, k, r);
       const rr = Math.hypot(x[k], x[k + 2]);
       if (rr > PIT_RADIUS - r) {
         x[k] *= (PIT_RADIUS - r) / rr;
         x[k + 2] *= (PIT_RADIUS - r) / rr;
       }
-      const ground = x[k + 1] < r;
-      if (ground) x[k + 1] = r;
+      // The open box's floor is ground too (the push has just left a ball resting on it at its top + r).
+      const ground = x[k + 1] < r || (floor !== null && onTop(x, k, floor, r + 1e-3));
+      if (x[k + 1] < r) x[k + 1] = r;
       // Velocity from the corrected positions, with a little bounce off the ground.
       const vy = (x[k + 1] - prev[k + 1]) / h;
       v[k] = ((x[k] - prev[k]) / h) * (ground ? 0.985 : 1);

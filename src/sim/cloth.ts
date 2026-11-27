@@ -10,6 +10,15 @@ export interface Aabb {
   hz: number;
 }
 
+/** A box open at the top: thin walls, and a floor whose top is ground like the real ground. */
+export interface OpenBox {
+  floor: Aabb;
+  walls: Aabb[];
+}
+
+/** What particles collide with: one solid box, or an open one. */
+export type Collider = Aabb | OpenBox;
+
 export interface SphereSet {
   count: number;
   pos: Float64Array; // xyz per sphere
@@ -170,12 +179,12 @@ export class Cloth {
     this.v[3 * i + 2] += vz;
   }
 
-  step(dt: number, substeps: number, box: Aabb | null) {
+  step(dt: number, substeps: number, box: Collider | null) {
     const h = dt / substeps;
     for (let s = 0; s < substeps; s++) this.substep(h, box);
   }
 
-  private substep(h: number, box: Aabb | null) {
+  private substep(h: number, box: Collider | null) {
     const { x, prev, v, w, gravity, n } = this;
     const damp = this.damping;
     for (let i = 0; i < n; i++) {
@@ -245,13 +254,14 @@ export class Cloth {
 
     const r = this.radius;
     const fr = this.groundFriction;
+    const floor = box && 'floor' in box ? box.floor : null;
     for (let i = 0; i < n; i++) {
       const k = 3 * i;
       if (w[i] !== 0) {
-        if (box) pushOutOfBox(x, k, box, r);
+        if (box) pushOutOfCollider(x, k, box, r);
         if (x[k + 1] < r) x[k + 1] = r;
       }
-      const ground = x[k + 1] < r * 1.5;
+      const ground = x[k + 1] < r * 1.5 || (floor !== null && onTop(x, k, floor, r * 1.5));
       v[k] = ((x[k] - prev[k]) / h) * (ground ? fr : 1);
       v[k + 1] = (x[k + 1] - prev[k + 1]) / h;
       v[k + 2] = ((x[k + 2] - prev[k + 2]) / h) * (ground ? fr : 1);
@@ -327,6 +337,44 @@ export function pushOutOfBox(x: Float64Array, k: number, b: Aabb, r: number) {
   if (dx > dy && dx > dz) x[k] = b.cx + (px < 0 ? -1 : 1) * (b.hx + r);
   else if (dy > dz) x[k + 1] = b.cy + (py < 0 ? -1 : 1) * (b.hy + r);
   else x[k + 2] = b.cz + (pz < 0 ? -1 : 1) * (b.hz + r);
+}
+
+/** Pushes point k out of the collider: the box, or each part of the open box in turn. */
+function pushOutOfCollider(x: Float64Array, k: number, c: Collider, r: number) {
+  if (!('floor' in c)) {
+    pushOutOfBox(x, k, c, r);
+    return;
+  }
+  pushOutOfBox(x, k, c.floor, r);
+  for (const b of c.walls) pushOutOfBox(x, k, b, r);
+}
+
+/**
+ * Pushes a sphere at k away from the nearest point of the box, with the box's edges rounded by `round`
+ * (at most its smallest half-size; the faces stay put). Rounded by half its thickness, a thin wall's rim
+ * is a half-cylinder that a ball rolls off. A centre inside the box leaves through the nearest face.
+ */
+export function pushSphereOutOfBox(x: Float64Array, k: number, b: Aabb, r: number, round = 0) {
+  const dx = x[k] - Math.max(b.cx - b.hx + round, Math.min(b.cx + b.hx - round, x[k]));
+  const dy = x[k + 1] - Math.max(b.cy - b.hy + round, Math.min(b.cy + b.hy - round, x[k + 1]));
+  const dz = x[k + 2] - Math.max(b.cz - b.hz + round, Math.min(b.cz + b.hz - round, x[k + 2]));
+  const d2 = dx * dx + dy * dy + dz * dz;
+  const R = r + round;
+  if (d2 >= R * R) return;
+  if (d2 < 1e-12) {
+    pushOutOfBox(x, k, b, r);
+    return;
+  }
+  const d = Math.sqrt(d2);
+  const s = (R - d) / d;
+  x[k] += dx * s;
+  x[k + 1] += dy * s;
+  x[k + 2] += dz * s;
+}
+
+/** Whether point k is over the box and less than h above its top. */
+export function onTop(x: ArrayLike<number>, k: number, b: Aabb, h: number): boolean {
+  return x[k + 1] < b.cy + b.hy + h && Math.abs(x[k] - b.cx) < b.hx && Math.abs(x[k + 2] - b.cz) < b.hz;
 }
 
 /** Signed distance from point to the box surface (negative inside). */

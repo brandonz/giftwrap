@@ -181,31 +181,57 @@ body.open {
   height: 100dvh;
 }
 
+/* Centred with margins, so its transform is free for the flight in (see openEnvelope). */
 .reveal {
   position: absolute;
-  left: 50%;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
   bottom: max(16px, env(safe-area-inset-bottom));
   width: min(440px, calc(100% - 32px));
-  transform: translate(-50%, 0);
-  padding: 20px;
   border-radius: 22px;
   background: var(--panel);
   border: 1px solid var(--line);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
-  display: grid;
-  gap: 14px;
-  animation: rise 0.7s cubic-bezier(0.2, 0.9, 0.25, 1.1) both;
-  max-height: calc(100dvh - 32px);
-  overflow: auto;
+  /* Keeps the shadow below (z-index: -1) within the card. */
+  isolation: isolate;
 }
 
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translate(-50%, 40px) scale(0.96);
-  }
+/* The card's drop shadow, on a layer of its own: the flight in fades it with opacity, which needs no repaints. */
+.reveal::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+/* Scrolls inside the card rather than the card itself, which would clip the envelope's flap as it opens. */
+.reveal-body {
+  /* The card stays 16px clear of the top and bottom; less its border. */
+  max-height: calc(100dvh - 34px);
+  padding: 20px;
+  display: grid;
+  gap: 14px;
+  overflow: auto;
+  border-radius: 21px;
+}
+
+/* The envelope's parts are only seen while animated, so a cut-short animation leaves the card open. */
+.reveal .envelope,
+.reveal .flap,
+.reveal .seal {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* Swings open about the card's top edge. */
+.reveal .flap {
+  transform-origin: 50% 0;
 }
 
 .reveal .names {

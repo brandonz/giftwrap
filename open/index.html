@@ -15,19 +15,25 @@
       <div id="tag" class="tag" hidden></div>
       <div id="loading" class="loading" role="status"><span class="loading-gift" aria-hidden="true"></span><span>Getting your gift ready</span></div>
       <section id="reveal" class="reveal" hidden aria-live="polite">
-        <div class="names" id="names"></div>
-        <h1 id="title" hidden></h1>
-        <div id="image-frame" class="image-frame" hidden>
-          <img id="image" alt="" referrerpolicy="no-referrer" decoding="async" />
+        <div class="reveal-body">
+          <div class="names" id="names"></div>
+          <h1 id="title" hidden></h1>
+          <div id="image-frame" class="image-frame" hidden>
+            <img id="image" alt="" referrerpolicy="no-referrer" decoding="async" />
+          </div>
+          <div class="code-row" id="code-row" hidden>
+            <div class="code" id="code"></div>
+            <button class="icon-btn" id="copy" type="button" aria-label="Copy code" title="Copy"></button>
+          </div>
+          <div class="actions">
+            <button class="icon-btn" id="replay" type="button" aria-label="Wrap it again" title="Again"></button>
+            <a class="icon-btn" id="make" href="../" aria-label="Wrap a gift" title="Wrap a gift"></a>
+          </div>
         </div>
-        <div class="code-row" id="code-row" hidden>
-          <div class="code" id="code"></div>
-          <button class="icon-btn" id="copy" type="button" aria-label="Copy code" title="Copy"></button>
-        </div>
-        <div class="actions">
-          <button class="icon-btn" id="replay" type="button" aria-label="Wrap it again" title="Again"></button>
-          <a class="icon-btn" id="make" href="../" aria-label="Wrap a gift" title="Wrap a gift"></a>
-        </div>
+        <!-- The envelope the card arrives in (src/ui/envelope.ts). -->
+        <canvas class="envelope" hidden aria-hidden="true"></canvas>
+        <canvas class="flap" hidden aria-hidden="true"></canvas>
+        <canvas class="seal" hidden aria-hidden="true"></canvas>
       </section>
       <div id="message" class="message" hidden role="alert"></div>
     </main>
