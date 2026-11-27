@@ -2,13 +2,13 @@
 
 import {
   BackSide,
-  BoxGeometry,
   BufferAttribute,
   BufferGeometry,
   CanvasTexture,
   Color,
   DoubleSide,
   DynamicDrawUsage,
+  Float32BufferAttribute,
   FrontSide,
   InstancedMesh,
   Matrix4,
@@ -24,7 +24,7 @@ import {
   type Scene,
 } from 'three';
 import type { PaperStyle, RibbonStyle, Rgb } from '../codec/gift';
-import { BASE, LID } from '../sim/dims';
+import { BASE, LID, WALL } from '../sim/dims';
 import type { World } from '../sim/world';
 import { drawPattern, TILE_SIZES } from './patterns';
 
@@ -62,15 +62,17 @@ export class GiftView {
     tier: 'high' | 'low',
   ) {
     const card = new MeshStandardMaterial({ color: '#f1e6d2', roughness: 0.75 });
+    const inside = new MeshStandardMaterial({ color: '#d9b88a', roughness: 0.85, vertexColors: true });
     this.glowMat = new MeshStandardMaterial({ color: '#2a1c10', emissive: new Color('#ffcf73'), emissiveIntensity: 0, roughness: 1 });
-    // BoxGeometry material order: +x, -x, +y (open top, glowing), -y, +z, -z.
-    this.base = new Mesh(new BoxGeometry(2 * BASE.hx, 2 * BASE.hy, 2 * BASE.hz), [card, card, this.glowMat, card, card, card]);
+    // Open boxes: the base opens upward onto a glowing floor; the lid is the same shape upside down, a tray.
+    this.base = new Mesh(openBox(BASE.hx, BASE.hy, BASE.hz, WALL), [card, inside, this.glowMat]);
     this.base.position.set(BASE.cx, BASE.cy, BASE.cz);
     this.base.castShadow = this.base.receiveShadow = true;
-    this.lid = new Mesh(new BoxGeometry(2 * LID.hx, 2 * LID.hy, 2 * LID.hz), card);
+    this.lid = new Mesh(openBox(LID.hx, LID.hy, LID.hz, WALL).rotateX(Math.PI), [card, inside, inside]);
     this.lid.castShadow = this.lid.receiveShadow = true;
+    // Down in the box, so the light comes from inside it: it warms the inner walls and spills out of the top.
     this.glow = new PointLight('#ffc768', 0, 6, 1.5);
-    this.glow.position.set(0, 1.6, 0);
+    this.glow.position.set(BASE.cx, 0.9, BASE.cz);
 
     this.patternTex = new CanvasTexture(this.patternCanvas);
     this.patternTex.colorSpace = SRGBColorSpace;
@@ -214,6 +216,59 @@ export class GiftView {
     this.ribbonGeo.computeBoundingSphere();
     this.ornaments.computeBoundingSphere();
   }
+}
+
+/** How dark the inner walls get at the floor, as a vertex colour. */
+const DEEP = 0.45;
+
+/**
+ * A box open at +y, centred on the origin, with walls and a floor t thick. Groups: 0 the outside and the
+ * rim, 1 the inner walls, 2 the inner floor. The inner walls shade darker toward the floor (vertex
+ * colours): little of the room's light reaches down there.
+ */
+function openBox(hx: number, hy: number, hz: number, t: number): BufferGeometry {
+  const pos: number[] = [];
+  const nor: number[] = [];
+  const col: number[] = [];
+  const geo = new BufferGeometry();
+  // The rectangle c ± u ± v, facing u × v, shaded `low` along its -v edge.
+  const rect = (c: number[], u: number[], v: number[], low = 1) => {
+    const n = new Vector3(...u).cross(new Vector3(...v)).normalize();
+    for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]]) {
+      for (let i = 0; i < 3; i++) pos.push(c[i] + a * u[i] + b * v[i]);
+      nor.push(n.x, n.y, n.z);
+      const s = b < 0 ? low : 1;
+      col.push(s, s, s);
+    }
+  };
+  const group = (material: number, build: () => void) => {
+    const start = pos.length / 3;
+    build();
+    geo.addGroup(start, pos.length / 3 - start, material);
+  };
+  // Each side by its outward direction (dx, dz); u runs along it, so u × up points out.
+  const sides = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  group(0, () => {
+    for (const [dx, dz] of sides) {
+      const w = dx ? hz : hx;
+      rect([dx * hx, 0, dz * hz], [dz * w, 0, -dx * w], [0, hy, 0]);
+      // The rim: the long strips run the full side, the short ones fit between them.
+      const r = dx ? [t / 2, hz] : [hx - t, t / 2];
+      rect([dx * (hx - t / 2), hy, dz * (hz - t / 2)], [r[0], 0, 0], [0, 0, -r[1]]);
+    }
+    rect([0, -hy, 0], [hx, 0, 0], [0, 0, hz]);
+  });
+  group(1, () => {
+    for (const [dx, dz] of sides) {
+      const w = dx ? hz - t : hx - t;
+      rect([dx * (hx - t), t / 2, dz * (hz - t)], [-dz * w, 0, dx * w], [0, hy - t / 2, 0], DEEP);
+    }
+  });
+  group(2, () => rect([0, t - hy, 0], [hx - t, 0, 0], [0, 0, -(hz - t)]));
+  geo.setAttribute('position', new Float32BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new Float32BufferAttribute(nor, 3));
+  geo.setAttribute('color', new Float32BufferAttribute(col, 3));
+  return geo;
 }
 
 function copy(geo: BufferGeometry, x: Float64Array) {

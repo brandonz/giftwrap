@@ -1,7 +1,7 @@
 // Everything that moves, and the unwrapping rules: untie the ribbon, tear the paper, the lid pops.
 
-import { boxDistance, type Aabb } from './cloth';
-import { BASE, GIFT, LID } from './dims';
+import { boxDistance, type Aabb, type OpenBox } from './cloth';
+import { BASE, FLOOR, GIFT, LID, WALL } from './dims';
 import { Lid } from './lid';
 import { Ornaments } from './ornaments';
 import { buildPaper, GLUE_BREAK, GLUE_K, type Paper } from './paper';
@@ -36,7 +36,24 @@ const UNTIE_PULL = 0.45;
 const TIED_HOLD = 0.3;
 
 const GIFT_BOX: Aabb = GIFT;
-const BASE_BOX: Aabb = BASE;
+/** The open base: a floor and four walls, so what lands in the opening falls inside. */
+export const OPEN_BASE: OpenBox = openBase();
+
+function openBase(): OpenBox {
+  const { cx, cy, cz, hx, hy, hz } = BASE;
+  const t = WALL / 2;
+  return {
+    // Between the walls, so its top edge is no ledge on the outside, and reaching well below the ground:
+    // whatever sinks into it is pushed up, never out underneath.
+    floor: { cx, cy: (FLOOR - 1) / 2, cz, hx: hx - WALL, hy: (FLOOR + 1) / 2, hz: hz - WALL },
+    walls: [
+      { cx: cx - hx + t, cy, cz, hx: t, hy, hz },
+      { cx: cx + hx - t, cy, cz, hx: t, hy, hz },
+      { cx, cy, cz: cz - hz + t, hx, hy, hz: t },
+      { cx, cy, cz: cz + hz - t, hx, hy, hz: t },
+    ],
+  };
+}
 
 export class World {
   readonly opts: WorldOptions;
@@ -227,7 +244,7 @@ export class World {
   step(dt: number) {
     this.frame++;
     const high = this.opts.detail === 'high';
-    const box = this.phase === 'open' ? BASE_BOX : GIFT_BOX;
+    const box = this.phase === 'open' ? OPEN_BASE : GIFT_BOX;
     this.ornaments.step(dt, box, this.lid);
     this.paper.cloth.step(dt, 8, box);
     this.ribbon.cloth.step(dt, high ? 6 : 4, box);

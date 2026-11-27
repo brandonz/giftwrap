@@ -151,8 +151,9 @@ export class Celebration {
         }
         if (this.cPos[k + 1] < 0.012) {
           this.cPos[k + 1] = 0.012;
+          // Flat on the ground, keeping its spin about the normal (Euler XYZ: x lays it down, y would tilt it).
           this.cRot[k] = -Math.PI / 2;
-          this.cRot[k + 2] = 0;
+          this.cRot[k + 1] = 0;
         }
       }
       const fade = Math.min(1, this.cLife[i] / 1.2);

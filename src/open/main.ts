@@ -3,9 +3,11 @@ import { decodeGift, type Gift } from '../codec/gift';
 import { Celebration } from '../scene/celebration';
 import { GiftView } from '../scene/giftView';
 import { attachInteraction } from '../scene/interaction';
+import { Letter } from '../scene/letter';
 import { detectTier, prefersReducedMotion, Stage, webglAvailable } from '../scene/stage';
 import { GIFT, TOP } from '../sim/dims';
 import { World } from '../sim/world';
+import { envelopeArt, openEnvelope } from '../ui/envelope';
 import { icons } from '../ui/icons';
 import { $, copyButton, fillTag, hideLoader, pinToScene, seedFrom } from '../ui/shared';
 
@@ -14,6 +16,10 @@ const payload = location.hash.slice(1);
 let image: 'none' | 'loading' | 'ready' | 'failed' = 'none';
 /** Set once the 3D gift is drawn (or there is none): decoding the image waits for that. */
 let decodeImage = false;
+/** The card is filled in (it may still be hidden). */
+let filled = false;
+/** The card is up and open: its size is free to change. */
+let cardOpen = false;
 // A different gift pasted into the same tab only changes the hash; start over with it.
 window.addEventListener('hashchange', () => location.reload());
 if (!payload) {
@@ -53,6 +59,7 @@ function start(gift: Gift, payload: string): boolean {
   view.setPaper(gift.paper);
   view.setRibbon(gift.ribbon);
   const party = new Celebration(stage, reduced);
+  const letter = new Letter(stage);
 
   const tag = $('#tag');
   const hasTag = fillTag(tag, gift.to, gift.from);
@@ -67,7 +74,27 @@ function start(gift: Gift, payload: string): boolean {
   };
   world.events.open = () => {
     party.play('big', [0, TOP - 0.1, 0]);
-    setTimeout(() => reveal(gift), reduced ? 300 : 1400);
+    // The flat gift is up (the world steps on while the context is lost, and can open by itself) or was
+    // opened already: nothing to rise in. reveal() leaves a card that is already up alone.
+    if (canvas.hidden || !$('#reveal').hidden) return reveal(gift, null);
+    if (reduced) {
+      setTimeout(() => reveal(gift, null), 300);
+      return;
+    }
+    // The card rises out of the box sealed in an envelope of its own shape, then the page's card takes
+    // its place on screen.
+    try {
+      const size = measureCard(gift);
+      // At the swap the 3D card is about 60% of the page card's size: no need for more texels than that.
+      const art = envelopeArt(size.width, size.height, Math.max(1, 0.6 * stage.renderer.getPixelRatio()));
+      void letter.rise(art, size.width / size.height).then((box) => reveal(gift, box));
+    } catch {
+      // A canvas refused (iOS under memory pressure): the card comes without its envelope.
+      reveal(gift, null);
+      return;
+    }
+    // A background tab draws no frames: bring the card anyway.
+    setTimeout(() => letter.land(), 2500);
   };
 
   // A nudge from the bow until someone touches the gift.
@@ -100,6 +127,8 @@ function start(gift: Gift, payload: string): boolean {
       // Once open (in 3D, or from the flat gift), the card is shown or on its way; a wrapped flat gift
       // would undo the moment.
       if (world.phase === 'open' || !$('#reveal').hidden) {
+        // A card still rising comes on now, from where it was (measured while the canvas is still shown).
+        letter.land();
         canvas.hidden = true;
         return;
       }
@@ -127,10 +156,54 @@ function start(gift: Gift, payload: string): boolean {
   return true;
 }
 
-function reveal(gift: Gift) {
+/**
+ * Shows the card. With motion, it flies in sealed from `from` (where the 3D card or the flat gift was)
+ * and opens; without, it fades in open.
+ */
+function reveal(gift: Gift, from: DOMRect | null) {
   const card = $('#reveal');
-  // The flat gift and the 3D one can both ask (a context lost while opening); wire the card once.
+  // The flat gift and the 3D one can both ask (a context lost while opening); the first one wins.
   if (!card.hidden) return;
+  fillCard(gift);
+  $('#message').hidden = true;
+  card.hidden = false;
+  if (from && !prefersReducedMotion() && openSealed(card, from)) return;
+  card.animate({ opacity: [0, 1] }, { duration: 200, easing: 'ease-out' });
+  cardOpened();
+}
+
+/** Brings the card in sealed and opens it. False if that could not start (a canvas refused): it fades in instead. */
+function openSealed(card: HTMLElement, from: DOMRect): boolean {
+  try {
+    void openEnvelope(card, from).then(cardOpened);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The card is in place and open: the image can take its own shape now. */
+function cardOpened() {
+  cardOpen = true;
+  settleFrame();
+}
+
+/** The card's box once shown, measured without showing it. */
+function measureCard(gift: Gift): DOMRect {
+  fillCard(gift);
+  const card = $('#reveal');
+  card.style.visibility = 'hidden';
+  card.hidden = false;
+  const box = card.getBoundingClientRect();
+  card.hidden = true;
+  card.style.visibility = '';
+  return box;
+}
+
+/** Fills the card from the gift, once: the 3D gift does it early, to measure the card. */
+function fillCard(gift: Gift) {
+  if (filled) return;
+  filled = true;
   const names = $('#names');
   names.replaceChildren();
   for (const [label, value] of [
@@ -150,7 +223,7 @@ function reveal(gift: Gift) {
   title.textContent = gift.title;
   title.hidden = !gift.title;
 
-  // Usually here already. If not, a placeholder keeps its place until it is (see imageSettled).
+  // Usually here already. If not, a placeholder keeps its place until it is (see settleFrame).
   const frame = $('#image-frame');
   if (image === 'loading') frame.dataset.state = 'loading';
   frame.hidden = image === 'none' || image === 'failed';
@@ -164,9 +237,6 @@ function reveal(gift: Gift) {
   replay.innerHTML = icons.replay;
   replay.onclick = () => location.reload();
   $('#make').innerHTML = icons.gift;
-
-  $('#message').hidden = true;
-  card.hidden = false;
 }
 
 /**
@@ -201,12 +271,22 @@ function decode(img: HTMLImageElement) {
 }
 
 function imageSettled(ok: boolean) {
+  image = ok ? 'ready' : 'failed';
+  settleFrame();
+}
+
+/**
+ * Once the image is in (or has failed) and the card is open with the placeholder, eases the frame to
+ * the image's shape (or away) and fades the image in. Not before the card is open: it keeps its size
+ * until then, as the 3D card that comes before it was shaped from it.
+ */
+function settleFrame() {
   const img = $('#image') as HTMLImageElement;
   const frame = $('#image-frame');
-  image = ok ? 'ready' : 'failed';
-  // Not open yet: reveal() shows it (or leaves it out).
-  if (frame.dataset.state !== 'loading') return;
-  // The card is up with the placeholder: ease it to the image's shape (or away), then fade the image in.
+  // No placeholder (the image settled before the card was filled), the image still on its way, or the
+  // card not open yet: imageSettled() or cardOpened() calls again.
+  if (frame.dataset.state !== 'loading' || image === 'loading' || !cardOpen) return;
+  const ok = image === 'ready';
   const from = frame.offsetHeight;
   // A broken image would draw its alt text and icon while the frame closes.
   img.hidden = !ok;
@@ -242,8 +322,10 @@ function flatGift(gift: Gift): HTMLButtonElement {
   btn.type = 'button';
   btn.setAttribute('aria-label', 'Open gift');
   btn.onclick = () => {
+    // The card comes out of where the gift was.
+    const from = btn.getBoundingClientRect();
     box.hidden = true;
-    reveal(gift);
+    reveal(gift, from);
   };
   // Without a label it reads as a picture, not something to tap. The button has its own aria-label.
   const hint = document.createElement('p');

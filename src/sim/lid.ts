@@ -1,6 +1,22 @@
 // The lid: a rigid box that stays put until the gift opens, then pops off, spins and lands.
 
-import { BASE, LID } from './dims';
+import { pushSphereOutOfBox, type Aabb } from './cloth';
+import { BASE, LID, WALL } from './dims';
+
+/** What ornaments hit, in the lid's own frame: a top plate and four skirt walls, open underneath. */
+const SHELL: Aabb[] = shell();
+
+function shell(): Aabb[] {
+  const { hx, hy, hz } = LID;
+  const t = WALL / 2;
+  return [
+    { cx: 0, cy: hy - t, cz: 0, hx, hy: t, hz },
+    { cx: hx - t, cy: 0, cz: 0, hx: t, hy, hz },
+    { cx: t - hx, cy: 0, cz: 0, hx: t, hy, hz },
+    { cx: 0, cy: 0, cz: hz - t, hx, hy, hz: t },
+    { cx: 0, cy: 0, cz: t - hz, hx, hy, hz: t },
+  ];
+}
 
 export class Lid {
   readonly pos = [LID.cx, LID.cy, LID.cz];
@@ -10,6 +26,8 @@ export class Lid {
   readonly ang = [0, 0, 0];
   readonly half = [LID.hx, LID.hy, LID.hz];
   free = false;
+  /** Scratch: a point in the lid's frame. */
+  private readonly local = new Float64Array(3);
   private readonly invMass = 1 / 1.5;
   private readonly invI: number[];
 
@@ -116,24 +134,15 @@ export class Lid {
     return [v[0] + qw * tx + (qy * tz - qz * ty), v[1] + qw * ty + (qz * tx - qx * tz), v[2] + qw * tz + (qx * ty - qy * tx)];
   }
 
-  /** Pushes a sphere at x[k] with radius r out of the lid (the sphere moves, the lid does not). */
+  /** Pushes a sphere at x[k] with radius r out of the lid's shell (the sphere moves, the lid does not). */
   pushOut(x: Float64Array, k: number, r: number) {
     if (!this.free) return;
-    const l = this.rotate([x[k] - this.pos[0], x[k + 1] - this.pos[1], x[k + 2] - this.pos[2]], true);
-    const c = [0, 1, 2].map((i) => Math.max(-this.half[i], Math.min(this.half[i], l[i])));
-    const d = [l[0] - c[0], l[1] - c[1], l[2] - c[2]];
-    const dl = Math.hypot(d[0], d[1], d[2]);
-    if (dl >= r) return;
-    let push: number[];
-    if (dl > 1e-9) push = d.map((q) => (q / dl) * (r - dl));
-    else {
-      // Centre inside the lid: leave through the nearest face.
-      const pen = [0, 1, 2].map((i) => this.half[i] - Math.abs(l[i]));
-      const ax = pen.indexOf(Math.min(...pen));
-      push = [0, 0, 0];
-      push[ax] = Math.sign(l[ax] || 1) * (pen[ax] + r);
-    }
-    const wp = this.rotate(push);
+    const l = this.local;
+    l.set(this.rotate([x[k] - this.pos[0], x[k + 1] - this.pos[1], x[k + 2] - this.pos[2]], true));
+    const [lx, ly, lz] = l;
+    // Upside down, it is a tray: a ball can land inside it, and rolls off its rim (rounded, as the base's).
+    for (const b of SHELL) pushSphereOutOfBox(l, 0, b, r, WALL / 2);
+    const wp = this.rotate([l[0] - lx, l[1] - ly, l[2] - lz]);
     x[k] += wp[0];
     x[k + 1] += wp[1];
     x[k + 2] += wp[2];
