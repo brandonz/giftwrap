@@ -82,9 +82,49 @@ if (stage) {
     lost: () => (preview.style.visibility = 'hidden'),
     restored: () => (preview.style.visibility = ''),
   });
+  holdThroughKeyboardBlips(preview);
   void stage.start().then(() => hideLoader());
 } else {
   $('.preview').hidden = true;
+}
+
+/**
+ * Chrome on Android shows a bar of autofill shortcuts above the keyboard and drops it for a moment each
+ * time focus moves to another field. With interactive-widget=resizes-content (see index.html) the page
+ * grows by the bar's height and shrinks back within a fifth of a second; following that resizes the
+ * preview twice, which refits the camera and shifts the form. So in the phone layout, while someone is
+ * typing, a small growth leaves the preview's height alone (the form takes the room). The preview
+ * follows the page again once it shrinks back or grows by a keyboard's height, its width or layout
+ * changes, or it resizes while no field has focus.
+ */
+function holdThroughKeyboardBlips(el: HTMLElement) {
+  if (!matchMedia('(pointer: coarse)').matches) return;
+  /** The phone layout in style.css: the preview on top, the form scrolling under it. */
+  const STACKED = '(max-width: 860px) and (min-height: 501px), (max-width: 599px)';
+  const stacked = matchMedia(STACKED);
+  /** Well over the bar's height, well under a keyboard's. */
+  const SMALL = 150;
+  let height = el.getBoundingClientRect().height;
+  let base = { width: innerWidth, height: innerHeight, stacked: stacked.matches };
+  let held = false;
+  // Reported after each layout that changes it, so the resize handler has the height from before the
+  // resize (measuring there would lay the page out for the new size).
+  new ResizeObserver(([e]) => {
+    if (!held) height = e.borderBoxSize[0].blockSize;
+  }).observe(el);
+  addEventListener('resize', () => {
+    const a = document.activeElement;
+    const typing = a instanceof HTMLInputElement && (a.type === 'text' || a.type === 'url') && !a.readOnly;
+    const growth = innerHeight - base.height;
+    if (typing && base.stacked && stacked.matches && innerWidth === base.width && growth > 0 && growth < SMALL) {
+      held = true;
+      el.style.height = `${height}px`;
+      return;
+    }
+    held = false;
+    el.style.height = '';
+    base = { width: innerWidth, height: innerHeight, stacked: stacked.matches };
+  });
 }
 
 // --- Controls -----------------------------------------------------------------
