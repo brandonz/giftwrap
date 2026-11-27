@@ -52,6 +52,12 @@ describe('codec', () => {
     expect(r.ok && Array.from(r.gift.title).length).toBe(LIMITS.title);
   });
 
+  it('keeps line breaks inside the message', () => {
+    const g = { ...cloneGift(DEFAULT_GIFT), title: 'Merry Christmas!\nLove,\nBrandon\n' };
+    const r = decodeGift(encodeGift(g));
+    expect(r.ok && r.gift.title).toBe('Merry Christmas!\nLove,\nBrandon');
+  });
+
   it('rejects every truncation and every single-character change', () => {
     const payload = encodeGift(full);
     for (let n = 0; n < payload.length; n++) expect(decodeGift(payload.slice(0, n)).ok).toBe(false);

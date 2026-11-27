@@ -7,7 +7,8 @@
   --gold-2: #ffe3a0;
   --red: #c8102e;
   --bad: #ff8a7a;
-  --panel: rgba(10, 22, 46, 0.74);
+  /* The gift's card. Some phones (Brave on Android) skip its backdrop blur, so it is near opaque. */
+  --panel: rgba(10, 22, 46, 0.92);
   --field: rgba(255, 255, 255, 0.06);
   --line: rgba(242, 193, 78, 0.28);
   --radius: 16px;
@@ -48,7 +49,8 @@ body {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
   color: inherit;
 }
@@ -253,6 +255,8 @@ body.open {
   line-height: 1.15;
   color: var(--gold-2);
   overflow-wrap: anywhere;
+  /* Shows the message as it was typed, line breaks and all. */
+  white-space: pre-wrap;
 }
 
 /* Holds the image's place in the card; while it is still loading, a placeholder of a set shape. */
@@ -483,7 +487,8 @@ body.open {
   opacity: 0.7;
 }
 
-.field input {
+.field input,
+.field textarea {
   width: 100%;
   padding: 12px 14px;
   border-radius: 12px;
@@ -492,10 +497,18 @@ body.open {
   font-size: 16px;
 }
 
-.field input:focus {
+.field input:focus,
+.field textarea:focus {
   border-color: var(--gold);
   outline: none;
   box-shadow: 0 0 0 3px rgba(242, 193, 78, 0.18);
+}
+
+/* Three lines, then it scrolls (26px: the padding and border). */
+.field textarea {
+  height: calc(3 * 1.4em + 26px);
+  line-height: 1.4;
+  resize: none;
 }
 
 .field[data-state='bad'] input {

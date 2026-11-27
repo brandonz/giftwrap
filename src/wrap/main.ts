@@ -39,6 +39,8 @@ const gift = loadDraft();
 const form = $('#form') as HTMLFormElement;
 const input = (id: string) => $('#' + id) as HTMLInputElement;
 const textFields = ['from', 'to', 'title', 'code', 'image'] as const;
+/** The text fields: inputs, but the gift message is a textarea. */
+const textField = (id: (typeof textFields)[number]) => $('#' + id) as HTMLInputElement | HTMLTextAreaElement;
 
 // --- 3D preview ---------------------------------------------------------------
 let world: World | null = null;
@@ -114,7 +116,8 @@ function holdThroughKeyboardBlips(el: HTMLElement) {
   }).observe(el);
   addEventListener('resize', () => {
     const a = document.activeElement;
-    const typing = a instanceof HTMLInputElement && (a.type === 'text' || a.type === 'url') && !a.readOnly;
+    const typing =
+      (a instanceof HTMLTextAreaElement || (a instanceof HTMLInputElement && (a.type === 'text' || a.type === 'url'))) && !a.readOnly;
     const growth = innerHeight - base.height;
     if (typing && base.stacked && stacked.matches && innerWidth === base.width && growth > 0 && growth < SMALL) {
       held = true;
@@ -183,9 +186,10 @@ const bowBox = $('#bows');
 });
 
 for (const f of textFields) {
-  input(f).value = gift[f];
-  input(f).addEventListener('input', () => {
-    gift[f] = input(f).value;
+  const el = textField(f);
+  el.value = gift[f];
+  el.addEventListener('input', () => {
+    gift[f] = el.value;
     if (f === 'image') checkImage();
     changed();
   });
