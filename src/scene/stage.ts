@@ -134,6 +134,8 @@ export class Stage {
   private onDrawn: (() => void) | null = null;
   /** Shadow maps on; otherwise a painted shadow sits under the gift. */
   private shadows: boolean;
+  /** The render loop is running (not before the warm-up, nor while a restore warms up again). */
+  private looping = false;
 
   constructor(readonly canvas: HTMLCanvasElement, opts: StageOptions) {
     this.tier = opts.tier;
@@ -199,7 +201,12 @@ export class Stage {
     });
     canvas.addEventListener('webglcontextrestored', () => void this.recover());
 
-    new ResizeObserver(() => this.resize()).observe(canvas);
+    new ResizeObserver(() => {
+      this.resize();
+      // Resizing clears the canvas, and observers run after this frame's draw: without a draw now the
+      // page paints an empty canvas for a frame (a flash each time a phone keyboard resizes the page).
+      if (this.looping) this.renderer.render(this.scene, this.camera);
+    }).observe(canvas);
     this.resize();
   }
 
@@ -245,6 +252,7 @@ export class Stage {
   private async recover() {
     const epoch = ++this.epoch;
     this.renderer.setAnimationLoop(null);
+    this.looping = false;
     // Every program is rebuilt now, so this is the moment to drop shadow maps if the loss came from them.
     if (this.shadows && !shadowsAllowed(this.renderer.getContext() as WebGL2RenderingContext, this.tier)) {
       this.shadows = false;
@@ -268,6 +276,7 @@ export class Stage {
   }
 
   private loop() {
+    this.looping = true;
     this.renderer.setAnimationLoop((t) => this.frame(t / 1000));
   }
 

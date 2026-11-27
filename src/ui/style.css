@@ -711,7 +711,8 @@ input[type='range'] {
 
 /* Stacked: the gift stays on screen while the form scrolls under it, in its own area. A phone on its
    side keeps the two columns, which fit it better; the width test keeps a portrait phone stacked while
-   its keyboard is up (it shrinks the page, see the viewport meta). */
+   its keyboard is up (it shrinks the page, see the viewport meta). STACKED in src/wrap/main.ts repeats
+   this query. */
 @media (max-width: 860px) and (min-height: 501px), (max-width: 599px) {
   .wrap-layout {
     display: flex;
