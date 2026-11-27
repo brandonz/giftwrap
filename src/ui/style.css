@@ -683,24 +683,40 @@ input[type='range'] {
   text-align: center;
 }
 
-@media (max-width: 860px) {
+/* Stacked: the gift stays on screen while the form scrolls under it, in its own area. A phone on its
+   side keeps the two columns, which fit it better; the width test keeps a portrait phone stacked while
+   its keyboard is up (it shrinks the page, see the viewport meta). */
+@media (max-width: 860px) and (min-height: 501px), (max-width: 599px) {
   .wrap-layout {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
   }
 
   .preview {
     position: relative;
+    flex: none;
+    height: 48vh;
     height: 48dvh;
-    min-height: 300px;
   }
 
   .panel {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Room around whatever is scrolled to (a focused field, the new link). */
+    scroll-padding: 16px;
     border-left: none;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
-    padding: 20px 16px 36px;
+    padding: 20px 16px calc(36px + env(safe-area-inset-bottom));
     border-radius: 22px 22px 0 0;
     margin-top: -18px;
     position: relative;
+    /* Solid: it overlaps the bottom of the gift's scene, which would show through its top edge. */
+    background: #0b1834;
   }
 }
 
