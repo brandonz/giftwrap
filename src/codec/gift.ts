@@ -49,7 +49,7 @@ export const FIELDS = ['from', 'to', 'title', 'code', 'image'] as const;
 export type Field = (typeof FIELDS)[number];
 
 /** Maximum lengths, in characters (code points). */
-export const LIMITS: Record<Field, number> = { from: 40, to: 40, title: 80, code: 80, image: 1024 };
+export const LIMITS: Record<Field, number> = { from: 40, to: 40, title: 160, code: 80, image: 1024 };
 
 /** Links longer than this are refused: some apps cut long links. */
 export const MAX_LINK_LENGTH = 2000;

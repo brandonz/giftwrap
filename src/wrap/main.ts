@@ -286,7 +286,7 @@ form.addEventListener('submit', (e) => {
   }
   const link = giftLink(gift, location.href);
   if (link.length > MAX_LINK_LENGTH) {
-    errorBox.textContent = 'Too long for a link. Try a shorter image URL.';
+    errorBox.textContent = 'Too long for a link. Try a shorter image URL or message.';
     errorBox.hidden = false;
     return;
   }

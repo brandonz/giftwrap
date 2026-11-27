@@ -99,6 +99,18 @@ describe('codec', () => {
     expect(giftLink(g, 'https://someone.github.io/giftwrap/').length).toBeLessThan(MAX_LINK_LENGTH);
   });
 
+  it('keeps every field maxed with 4-byte characters under the link limit, image aside', () => {
+    const g: Gift = {
+      ...cloneGift(full),
+      from: '🎁'.repeat(LIMITS.from),
+      to: '🎁'.repeat(LIMITS.to),
+      title: '🎁'.repeat(LIMITS.title),
+      code: '🎁'.repeat(LIMITS.code),
+      image: '',
+    };
+    expect(giftLink(g, 'https://someone.github.io/giftwrap/').length).toBeLessThan(MAX_LINK_LENGTH);
+  });
+
   it('builds links next to the wrap page, under any subpath', () => {
     expect(giftLink(DEFAULT_GIFT, 'https://someone.github.io/giftwrap/?x=1#old')).toMatch(
       /^https:\/\/someone\.github\.io\/giftwrap\/open\/#[A-Za-z0-9_-]+$/,
